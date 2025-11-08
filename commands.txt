@@ -1,0 +1,3 @@
+Running ngspics
+/users/micas/mahmadza/bin/cad_env/bin/python3.13 
+/users/micas/mahmadza/public/bin/ngspice ngspice_interface/files/input_netlists/TwoStage.cir
