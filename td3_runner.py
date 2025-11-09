@@ -12,7 +12,7 @@ def readParser():
     parser.add_argument('--seed', type=int, default=123456, metavar='N',
                         help='random seed (default: 123456)')
 
-    parser.add_argument('--noise_sigma', type=float, default=0,
+    parser.add_argument('--noise_sigma', type=float, default=0.1,
                         help='fixed noise sigma added to the deterministic action')
 
     parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
@@ -36,7 +36,7 @@ def readParser():
     parser.add_argument('--w', type=int, default=500, metavar='N',
                         help='number of warmup steps')
     #
-    parser.add_argument('--T', type=int, default=1500, metavar='N',
+    parser.add_argument('--T', type=int, default=4500, metavar='N',
                         help='total training steps (default: 10_000)')
     
     parser.add_argument('--pi_lr', type=float, default=1e-4, metavar='G',
@@ -81,6 +81,19 @@ def train(args, env, agent, env_pool):
     print("Final evaluation of the trained model:")
     print(f"\n real spec: {env.real_specs}")
     print(f"\n real param values: {env.param_values}")
+     # Pareto
+    try:
+        result = utils.plotting.solutions2pareto(
+            "./solutions/solutions.csv", run_id="2025-11-09--test"
+        )
+        
+        if isinstance(result, tuple) and len(result) == 2:
+            pareto_df, pareto_csv = result
+            print(pareto_df[["Specs", "Reward"]])
+            print("Pareto CSV:", pareto_csv)
+    except Exception as e:
+        print("solutions2pareto failed:", repr(e))
+
     print(f"\nSaving the trained models in ./models/td3_{args.run_id}/")
     if not os.path.exists(f'./models/td3_{args.run_id}/'):
         os.makedirs(f'./models/td3_{args.run_id}/')

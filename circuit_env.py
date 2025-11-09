@@ -2,6 +2,8 @@ import gymnasium as gym
 from gymnasium.spaces import Box
 import numpy as np
 import os
+import json
+import csv
 import yaml
 import math
 from ngspice_interface import DUT as DUT_NGSpice
@@ -34,6 +36,7 @@ class CircuitEnv(gym.Env):
 
         # number of input action components
         self.n_actions = len(self.dict_params) #20 [min,max,step]
+        self.score = 0.0
 
         # number of output observation components
         self.obs_dim = len(self.dict_targets) #7
@@ -95,15 +98,52 @@ class CircuitEnv(gym.Env):
         
         """
         
-        # continuos mapping
-        actual_action = {}
-        action = np.asarray(action, dtype=np.float32).flatten()
-        # print("Action:", action)
-        # print("Action shape:", action.shape)
-        for i,name in enumerate(list(self.dict_params.keys())):
-            actual_action[name] = (action[i]+1)*0.5*(self.param_ranges[name]["max"]-self.param_ranges[name]["min"]) + self.param_ranges[name]["min"]
-        return actual_action
-    
+        # # continuos mapping
+        # actual_action = {}
+        # action = np.asarray(action, dtype=np.float32).flatten()
+        # # print("Action:", action)
+        # # print("Action shape:", action.shape)
+        # for i,name in enumerate(list(self.dict_params.keys())):
+        #     actual_action[name] = (action[i]+1)*0.5*(self.param_ranges[name]["max"]-self.param_ranges[name]["min"]) + self.param_ranges[name]["min"]
+        # return actual_action
+        
+        action = np.array(action).flatten()
+        real_params = {}
+        for i, (param_name, range_info) in enumerate(self.param_ranges.items()):
+            vmin = float(range_info['min'])
+            vmax = float(range_info['max'])
+            step = float(range_info.get('step', 0.0))
+
+            # 夹紧动作到 [-1, 1]
+            a = float(np.clip(action[i], -1.0, 1.0))
+
+            if step <= 0.0:
+                # 如果没有有效 step，回退到连续映射
+                val = (a + 1.0) * 0.5 * (vmax - vmin) + vmin
+                real_params[param_name] = val
+                continue
+
+            # 计算离散网格点数（加入一个小的 eps 防止浮点误差导致 off-by-one）
+            eps = 1e-12
+            n_points = int(np.floor((vmax - vmin) / step + eps)) + 1
+            # 生成网格：vmin, vmin+step, ..., vmin+(n_points-1)*step
+            grid = vmin + step * np.arange(n_points, dtype=float)
+
+            # 将 a∈[-1,1] 映射到 [0, n_points-1]
+            idx_float = (a + 1.0) * 0.5 * (n_points - 1)
+            idx = int(np.clip(np.round(idx_float), 0, n_points - 1))
+
+            val = float(grid[idx])
+
+            # 如果是“看起来像整数网格”，返回 int（便于像 mp1/mn1 这种计数参数）
+            def is_int_like(x): 
+                return abs(x - round(x)) < 1e-12
+            if is_int_like(vmin) and is_int_like(vmax) and is_int_like(step):
+                val = int(round(val))
+
+            real_params[param_name] = val
+        return real_params
+        
     
     def simulate(self, params):
         """
@@ -225,7 +265,7 @@ class CircuitEnv(gym.Env):
         ob = np.array(list(self.cur_norm_specs.values()), dtype=np.float32)
         #4. Append the reward to the reward history and update the score
         self.reward_history.append(reward)
-        self.reward_history[-1] += reward
+        self.score += reward
         #5. Create output directories if they do not exist
         output_dir = os.path.join(os.getcwd(), 'output_figs',str(self.run_id))
         if not os.path.exists(output_dir):
@@ -247,9 +287,9 @@ class CircuitEnv(gym.Env):
         #9. Every 10 steps, update the score history, also plot the learning curve
         self.counter += 1
         if (self.counter) % 10 == 0:
-            self.score_history.append(self.reward_history[-1])
+            self.score_history.append(self.score)
             plotLearning(self.score_history,run_id=self.run_id)
-            self.reward_history[-1] = 0.0
+            self.score = 0.0
         #10. Return the current observation, reward, done flag, and additional information
         info = {'hard_satisfied': hard_satisfied}
         return ob, reward, done, info
@@ -298,28 +338,28 @@ class CircuitEnv(gym.Env):
         # 4. Return the computed reward and the hard_satisfied flag.
         return reward, hard_satisfied
 
-def save_solution(self, reward):
-        folder = './solutions'
-        os.makedirs(folder, exist_ok=True)
-        csv_path = os.path.join(folder, 'solutions.csv')
+    def save_solution(self, reward):
+            folder = './solutions'
+            os.makedirs(folder, exist_ok=True)
+            csv_path = os.path.join(folder, 'solutions.csv')
 
-        # combine specs dict
-        specs_dict = {**self.real_specs}
+            # combine specs dict
+            specs_dict = {**self.real_specs}
 
-        # create a row with 'Specs' and 'reward'
-        row = {
-            'Params': json.dumps({k: float(v) for k, v in self.param_values.items()}),
-            'Specs': json.dumps({k: float(v) for k, v in specs_dict.items()}),  # dict as string
-            'reward': float(reward)
-        }
+            # create a row with 'Specs' and 'reward'
+            row = {
+                'Params': json.dumps({k: float(v) for k, v in self.param_values.items()}),
+                'Specs': json.dumps({k: float(v) for k, v in specs_dict.items()}),  # dict as string
+                'reward': float(reward)
+            }
 
-        # append to CSV
-        file_exists = os.path.isfile(csv_path)
-        with open(csv_path, mode='a', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['Params','Specs', 'reward'])
-            if not file_exists:
-                writer.writeheader()
-            writer.writerow(row)
+            # append to CSV
+            file_exists = os.path.isfile(csv_path)
+            with open(csv_path, mode='a', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=['Params','Specs', 'reward'])
+                if not file_exists:
+                    writer.writeheader()
+                writer.writerow(row)
 
 if __name__ == '__main__':
     env = CircuitEnv(
