@@ -137,7 +137,8 @@ class TD3(object):
         Returns:
             action: The selected action as a numpy array
         """
-        print("\nSelecting action...")
+        
+        #print("\nSelecting action...")
         # 1. Convert the state to a tensor if it's a numpy array or CPU tensor
             # if it is a numpy array from the environment
         if isinstance(state,np.ndarray):
@@ -152,9 +153,9 @@ class TD3(object):
         #2. Get the deterministic action from the actor network (mu) 
             # gpu tensor -> cpu array 
             # flatten: convert 2D -> 1D   
-        print(f"\n state in select_action: {state}")
+        #print(f"\n state in select_action: {state}")
         action = self.actor(state).cpu().data.numpy().flatten()
-        print(f"\n action before noise: {action}")
+        #print(f"\n action before noise: {action}")
         # 3. Add Gaussian exploration noise
         noise = np.random.normal(0, self.max_action * self.expl_noise, size=self.action_dim)
         action = action + noise
@@ -201,7 +202,8 @@ class TD3(object):
             memory_batch: Tuple of (state, action, reward, next_state, not_done) tensors
             update: Update step (not used in this implementation)
         """
-        print("\nUpdating parameters...")
+
+        #print("\nUpdating parameters...")
         #1. Increment total_it counter
         self.total_it +=1
         #2. Unpack the memory_batch tuple into state, action, next_state, reward, not_done

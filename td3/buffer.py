@@ -18,31 +18,26 @@ class ReplayBuffer(object):
 
 
 	def push(self, state, action, reward, next_state, done):
-		print("\nStoring transition in replay buffer...")
+		#print("\nStoring transition in replay buffer...")
 		self.state[self.ptr] = state
 		self.action[self.ptr] = action
 		self.next_state[self.ptr] = next_state
 		self.reward[self.ptr] = reward
 		self.not_done[self.ptr] = 1. - done
-		print(f"\n Stored at position: {self.ptr}")
-		print(f"\n state stored: {self.state[self.ptr]}")
-		print(f"\n action stored: {self.action[self.ptr]}")
-		print(f"\n reward stored: {self.reward[self.ptr]}")
-		print(f"\n next_state stored: {self.next_state[self.ptr]}")
-		print(f"\n not_done stored: {self.not_done[self.ptr]}")
+		
 
 		self.ptr = (self.ptr + 1) % self.max_size
 		self.size = min(self.size + 1, self.max_size)
 
 
 	def sample(self, batch_size):
-		print("\nSampling batch from replay buffer...")
+		#print("\nSampling batch from replay buffer...")
 		ind = np.random.randint(0, self.size, size=batch_size)
 
 		return (
 			torch.FloatTensor(self.state[ind]).to(self.device),
 			torch.FloatTensor(self.action[ind]).to(self.device),
-			torch.FloatTensor(self.reward[ind]).to(self.device),
 			torch.FloatTensor(self.next_state[ind]).to(self.device),
+			torch.FloatTensor(self.reward[ind]).to(self.device),
 			torch.FloatTensor(self.not_done[ind]).to(self.device)
 		)

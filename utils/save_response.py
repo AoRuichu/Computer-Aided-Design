@@ -13,7 +13,7 @@ def writeMd(response: types.GenerateContentResponse, filename: str = "output.md"
 
     # default path
     project_dir = Path(__file__).parent.parent
-    path = os.path.join(project_dir, "no_backup", "markdown_files")
+    path = os.path.join(project_dir, "backup", "markdown_files")
 
     md_string = ""
     # monitoring the thinking summary and the final answer

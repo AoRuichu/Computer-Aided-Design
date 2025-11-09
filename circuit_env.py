@@ -45,7 +45,7 @@ class CircuitEnv(gym.Env):
         #simulate engine
         self.simulation_engine = DUT_NGSpice(circuit_yaml_path)
 
-        print(f"\n Initialized {circuit_name} with simulator {simulator} \n")
+        #print(f"\n Initialized {circuit_name} with simulator {simulator} \n")
 
         # Initialization of action space & observation space
         """
@@ -97,8 +97,9 @@ class CircuitEnv(gym.Env):
         
         # continuos mapping
         actual_action = {}
-        print("Action:", action)
-        print("Action shape:", action.shape)
+        action = np.asarray(action, dtype=np.float32).flatten()
+        # print("Action:", action)
+        # print("Action shape:", action.shape)
         for i,name in enumerate(list(self.dict_params.keys())):
             actual_action[name] = (action[i]+1)*0.5*(self.param_ranges[name]["max"]-self.param_ranges[name]["min"]) + self.param_ranges[name]["min"]
         return actual_action
@@ -119,7 +120,7 @@ class CircuitEnv(gym.Env):
                                                                     temp_pvt=self.pvt_corner['temp'],
                                                                     vdd=self.pvt_corner['voltage'])
         info = self.simulation_engine.simulate(new_netlist_path)
-        print(f"\nNew netlist created at: {new_netlist_path}")
+        #print(f"\nNew netlist created at: {new_netlist_path}")
         return self.simulation_engine.measure_metrics()
     
     def normalize_specs(self, spec_dict):
@@ -146,11 +147,11 @@ class CircuitEnv(gym.Env):
     
     def evaluate(self, action):
         self.param_values = self.action_refine(action)
-        # print(f"\n Evaluating action: {action}")
+        #print(f"\n Env-Evaluate: Refined action: {action}")
         self.real_specs = self.simulate(self.param_values)
-        # print(f"\n Real specs: {self.real_specs}")
+        #print(f"\n Env-Evaluate: Real specs: {self.real_specs}")
         self.cur_norm_specs = self.normalize_specs(self.real_specs)
-        # print(f"\n Normalized specs: {self.cur_norm_specs}")
+        #print(f"\n Env-Evaluate: Normalized specs: {self.cur_norm_specs}")
     
     def reset(self, *, seed=None, options=None):
         """
@@ -175,7 +176,6 @@ class CircuitEnv(gym.Env):
         - The observation is returned as a NumPy array of type float32.
         """
         # 1. Initialize episode steps counter to zero
-        self.counter=0
         self.env_steps = 0
         self.episode_steps = 0
         # 2. Generates a random action within the range [-1,1] for each action parameter
@@ -232,14 +232,17 @@ class CircuitEnv(gym.Env):
             os.makedirs(output_dir)
         #6. If the goal state is reached, plot the running maximum reward
         if hard_satisfied:
+            print("\n hard satisfied, plot reward")
+            self.save_solution(reward)
             plot_running_maximum(self.reward_history,self.run_id)
+            
         #7. Increment the environment and episode step counters
         self.env_steps += 1
         self.episode_steps += 1
         #8. Check if the maximum steps per episode have been reached, setting the done flag
         done = False
-        print(f"Step: {self.episode_steps}/{self.max_steps_per_episode}, Reward: {reward}, Hard satisfied: {hard_satisfied}")
-        if self.episode_steps >= self.max_steps_per_episode:
+        print(f" Reward: {reward}, Hard satisfied: {hard_satisfied}")
+        if self.env_steps >= self.max_steps_per_episode:
             done = True
         #9. Every 10 steps, update the score history, also plot the learning curve
         self.counter += 1
@@ -294,6 +297,29 @@ class CircuitEnv(gym.Env):
             reward = reward_hard + 0.05*reward_target
         # 4. Return the computed reward and the hard_satisfied flag.
         return reward, hard_satisfied
+
+def save_solution(self, reward):
+        folder = './solutions'
+        os.makedirs(folder, exist_ok=True)
+        csv_path = os.path.join(folder, 'solutions.csv')
+
+        # combine specs dict
+        specs_dict = {**self.real_specs}
+
+        # create a row with 'Specs' and 'reward'
+        row = {
+            'Params': json.dumps({k: float(v) for k, v in self.param_values.items()}),
+            'Specs': json.dumps({k: float(v) for k, v in specs_dict.items()}),  # dict as string
+            'reward': float(reward)
+        }
+
+        # append to CSV
+        file_exists = os.path.isfile(csv_path)
+        with open(csv_path, mode='a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['Params','Specs', 'reward'])
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
 
 if __name__ == '__main__':
     env = CircuitEnv(

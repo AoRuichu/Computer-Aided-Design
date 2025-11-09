@@ -8,7 +8,7 @@ import numpy as np
 import os
 from ngspice_interface import DUT as DUT_NGSpice
 
-class Args:
+class Args: # A simple Args class to hold parameters
     def __init__(self, **kwargs):
         self.seed = kwargs.get('seed', 123456)
         self.noise_sigma = kwargs.get('noise_sigma', ...)
@@ -26,7 +26,7 @@ class Args:
         self.no_discretize = kwargs.get('no_discretize', False)
         self.run_id = kwargs.get('run_id', datetime.now().strftime('%Y-%m-%d--%H-%M-%S'))
 
-class TD3Runner:
+class TD3Runner: # TD3-based RL agent for circuit sizing
     def __init__(self, args=None):
         if args is None:
             args = Args()
@@ -67,7 +67,25 @@ class TD3Runner:
             done = False
             while not done:
                 action = self.agent.select_action(obs)
-                next_state, reward, done, _ = self.env.step(action)
+                next_state, reward, done, info = self.env.step(action)
+                if info['hard_satisfied'] is True:
+                    self.env_pool.push(obs, action, reward, next_state, done)
+                obs = next_state
+                self.train_policy()
+                self.total_steps += 1
+                # clean up the no_backup folder every 100 steps
+                if self.total_steps % 100 == 0:
+                    os.system('./clean.sh')
+    
+    def train_after_llm_guidance(self, budget_steps):
+        while self.total_steps < budget_steps:
+            obs = self.env.reset()
+            done = False
+            while not done:
+                action = self.agent.select_action(obs)
+                print(f"\n Train after llm: action:{action}, obs:{obs},steps:{self.total_steps} / {budget_steps}")
+                next_state, reward, done, info = self.env.step(action)
+                print(f"\nNext state:{next_state},Reward:{reward},hard satified:{info['hard_satisfied']}")
                 self.env_pool.push(obs, action, reward, next_state, done)
                 obs = next_state
                 self.train_policy()
@@ -88,9 +106,9 @@ class TD3Runner:
                 self.total_steps += 1
 
     def train_policy(self):
-        state, action, reward, next_state, done = self.env_pool.sample(self.args.batch_size)
-        batch = (state, action, reward, next_state, done)
-        self.agent.update_parameters(memory=batch, update=self.total_steps)
+        state, action, next_state, reward, not_done = self.env_pool.sample(self.args.batch_size)
+        batch = (state, action, reward, next_state, not_done)
+        self.agent.update_parameters(memory_batch=batch, update=self.total_steps)
     
     
     def convert_parameters_to_action(self, param_dict):
@@ -118,6 +136,9 @@ class TD3Runner:
                     param_dict[name] = real_value.item()
                 best_params = param_dict
         specs = self.env.simulate(best_params)
+        print("\nSpecs of FDDIP:",specs)
+        print("\nbest reward:",best_reward)
+        print("\nbest params:",best_params)
         return {"params": best_params, "specs": specs}
 
     def add_llm_experience_to_RL_memory(self, specs1, refined_params, specs2):

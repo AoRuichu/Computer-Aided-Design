@@ -15,30 +15,36 @@ Initial Transient Solution
 
 Node                                   Voltage
 ----                                   -------
-net4                                  0.844742
+net4                                  0.622958
 vdd                                        1.2
-net5                                   1.19922
+net5                                   1.19997
 net2                                       0.9
-net3                                  0.735611
+net3                                   0.44073
 net1                                       0.3
-net7                                  0.380546
+net7                                  0.385104
 vss                                          0
-net6                               2.62919e-06
-net8                               2.62919e-06
+net6                               9.87542e-06
+net8                               9.87542e-06
 vcm                                        0.6
 aid                                       -0.6
-ein2#branch                       -1.52314e-10
-ein1#branch                        6.34246e-08
-vss#branch                         3.27101e-05
-vdd#branch                        -3.27101e-05
+ein2#branch                       -2.69464e-09
+ein1#branch                        2.34191e-08
+vss#branch                         0.000100296
+vdd#branch                        -0.000100296
 vinput#branch                                0
-vicm#branch                        6.32723e-08
+vicm#branch                        2.07244e-08
 
 Note: vinput: dc value used for op instead of transient time=0 value.
+Note: Starting dynamic gmin stepping
+Note: Dynamic gmin stepping completed
 Note: vinput: dc value used for op instead of transient time=0 value.
+Note: Starting dynamic gmin stepping
+Note: Dynamic gmin stepping completed
 Note: vinput: dc value used for op instead of transient time=0 value.
+Note: Starting dynamic gmin stepping
+Note: Dynamic gmin stepping completed
 
-No. of Data Rows : 644
+No. of Data Rows : 668
 Reset re-loads circuit twostage_opamp_netlist
 
 Circuit: twostage_opamp_netlist

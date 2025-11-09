@@ -1,4 +1,5 @@
 import time
+import warnings
 import numpy as np
 import os
 import scipy.interpolate as interp
@@ -79,6 +80,7 @@ class DUT(NgspiceWrapper):
         ugbw,success = self._get_best_crossing(freq,mag,1.0)
         
         if ugbw is None or not success or np.isnan(ugbw): 
+                #print("DUT-Find_ugbw: No UGBW crossing found.")
                 return 0.0 # return 0 if no crossing found
             
         return ugbw 
@@ -98,9 +100,7 @@ class DUT(NgspiceWrapper):
         phase = np.angle(vout, deg=True)
         
         ugbw = self.find_ugbw(freq,vout)
-        if ugbw == 0.0 or np.isnan(ugbw):
-                return 0.0 # return 0 if no UGBW found
-
+    
         f_interp = interp.interp1d(freq,phase,kind='quadratic', fill_value="extrapolate")
         phase_at_ugbw = f_interp(ugbw)
         
@@ -134,11 +134,9 @@ class DUT(NgspiceWrapper):
         t_low = self._get_all_corssing_at_risedge(time, sig_norm, threshold_low)
         t_high = self._get_all_corssing_at_risedge(time, sig_norm, threshold_high)
         
-        # print("t_low:",t_low)
-        # print("t_high:",t_high)
 
         if len(t_low) == 0 or len(t_high) == 0:
-            return np.nan
+            return 0.0  # No crossings found
         
         dv = (threshold_high - threshold_low)*(high_level-low_level)
         n = min(len(t_low), len(t_high))
@@ -149,39 +147,21 @@ class DUT(NgspiceWrapper):
         if time_unit == 'us':
             slew /= 1e6  # V/us
             
-        
-        # fig, ax1 = plt.subplots(figsize=(10, 5))
-
-        # # Left y-axis: original signal
-        # ax1.plot(time, signal, label='Original Signal', color='tab:blue', linewidth=1.5)
-        # ax1.axhline(low_level, color='tab:blue', linestyle='--', alpha=0.6, label='Low Level (5%)')
-        # ax1.axhline(high_level, color='tab:blue', linestyle=':', alpha=0.6, label='High Level (95%)')
-        # ax1.set_xlabel("Time [s]")
-        # ax1.set_ylabel("Voltage [V]", color='tab:blue')
-        # ax1.tick_params(axis='y', labelcolor='tab:blue')
-        # ax1.grid(True, linestyle='--', alpha=0.5)
-
-        # # Right y-axis: normalized signal
-        # ax2 = ax1.twinx()
-        # ax2.plot(time, sig_norm, label='Normalized Signal', color='tab:orange', linewidth=1.5, alpha=0.8)
-        # ax2.axhline(threshold_low, color='orange', linestyle='--', alpha=0.5, label=f'{threshold_low*100:.0f}% level')
-        # ax2.axhline(threshold_high, color='orange', linestyle=':', alpha=0.5, label=f'{threshold_high*100:.0f}% level')
-        # ax2.set_ylabel("Normalized Value", color='tab:orange')
-        # ax2.tick_params(axis='y', labelcolor='tab:orange')
-
-        # # Combine legends
-        # lines, labels = ax1.get_legend_handles_labels()
-        # lines2, labels2 = ax2.get_legend_handles_labels()
-        # ax1.legend(lines + lines2, labels + labels2, loc='best')
-
-        # plt.title("Signal vs Normalized Signal (for Slew Rate Calculation)")
-        # plt.tight_layout()
-        # plt.show()
-
         return slew
 
     # look for single xvec when yvec == val 
     def _get_best_crossing(cls, xvec, yvec, val): 
+        xvec = np.asarray(xvec).reshape(-1)
+        yvec = np.asarray(yvec).reshape(-1)
+
+        idx = np.argsort(xvec)
+        xvec = xvec[idx]
+        yvec = yvec[idx]
+
+        keep = np.concatenate(([True], np.diff(xvec) > 0))
+        xvec = xvec[keep]
+        yvec = yvec[keep]
+        
         interp_fun = interp.InterpolatedUnivariateSpline(xvec, yvec)
 
         def fzero(x):
@@ -195,6 +175,26 @@ class DUT(NgspiceWrapper):
     
     # look for all crossing at rising edge
     def _get_all_corssing_at_risedge(cls, xvec, yvec, val):
+        xvec = np.asarray(xvec).reshape(-1)
+        yvec = np.asarray(yvec).reshape(-1)
+
+        idx = np.argsort(xvec)
+        xvec = xvec[idx]
+        yvec = yvec[idx]
+
+        keep = np.concatenate(([True], np.diff(xvec) > 0))
+        xvec = xvec[keep]
+        yvec = yvec[keep]
+
+        if not np.all(np.diff(xvec) > 0.0):
+            bad_idx = np.where(np.diff(xvec) <= 0)[0]
+            preview = ", ".join(str(int(i)) for i in bad_idx[:5])
+            warnings.warn(
+            (f"[{cls.netlist_path}]_get_all_corssing_at_risedge: x is not strictly increasing at "
+             f"indices [{preview}] (and possibly more). Interpolation may fail."),
+            RuntimeWarning
+            )
+           
         interp_fun = interp.InterpolatedUnivariateSpline(xvec,yvec)
         def fzero(x):
             return interp_fun(x) - val
